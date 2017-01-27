@@ -94,15 +94,25 @@ func (t *Template) Close() {
 // Write populates a buffer using a template with NGINX configuration
 // and the servers and upstreams created by Ingress rules
 func (t *Template) Write(
+	// NGINX expects the bucket_size etc. to actually be based on the
+	// result of NGX_HASH_ELT_SIZE (which is platform dependent). See
+	// https://trac.nginx.org/nginx/browser/nginx/src/core/ngx_hash.c?rev=5635
+	// if (hinit->bucket_size < NGX_HASH_ELT_SIZE(&names[n]) + sizeof(void *))
+	// #define NGX_HASH_ELT_SIZE(name)
+	//  (sizeof(void *) + ngx_align((name)->key.len + 2, sizeof(void *)))
+	// To simplify this, we assume the worst case of 64-bit sizeof(void *) == 8
+	const NGINX_SIZE_PADDING = 18;
+
+
 	cfg config.Configuration,
 	ingressCfg ingress.Configuration,
 	isValidTemplate func([]byte) error) ([]byte, error) {
 	var longestName int
 	var serverNames int
 	for _, srv := range ingressCfg.Servers {
-		serverNames += len([]byte(srv.Name))
+		serverNames += len([]byte(srv.Name)) + NGINX_SIZE_PADDING
 		if longestName < len(srv.Name) {
-			longestName = len(srv.Name)
+			longestName = len(srv.Name) + NGINX_SIZE_PADDING
 		}
 	}
 
